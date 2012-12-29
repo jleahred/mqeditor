@@ -52,7 +52,7 @@
   <customwidget>
    <class>MQEditor</class>
    <extends>QPlainTextEdit</extends>
-   <header>mqeditor.h</header>
+   <header>../src/mqeditor.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

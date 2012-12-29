@@ -12,11 +12,11 @@ TEMPLATE = app
 
 SOURCES += main.cpp\
         mainwindow.cpp \
-    mqeditor/mqeditor.cpp
+    ../src/mqeditor.cpp
 
 HEADERS  += mainwindow.h \
-    mqeditor/mqeditor.h
+    ../src/mqeditor.h
 
 FORMS    += mainwindow.ui
 
-INCLUDEPATH += mqeditor
+INCLUDEPATH += ../srcs

@@ -1,21 +1,46 @@
+/*
+
+  · remove spaces at end of each block
+    when writting and when saving
+
+  · mark selected
+
+  · find, replace, mark
+
+  · status bar with row and col
+
+  · command window with control key
+
+  · configuration with yaml
+
+  · borrar tabuladores a la izquierda, pendiente de mtk::s_trim
+
+  */
+
 #include "mqeditor.h"
 #include <iostream>
 #include <QTextBlock>
 #include <QPainter>
+#include <QLabel>
+#include <QHBoxLayout>
+
 
 
 MQEditor::MQEditor(QWidget *parent) :
     QPlainTextEdit(parent)
 {
+    line_command_area = new LineCommandArea(this);
+    line_command_area->adjustSize();
+
     lineNumberArea = new LineNumberArea(this);
 
     connect(this, SIGNAL(blockCountChanged(int)), this, SLOT(updateLineNumberAreaWidth(int)));
     connect(this, SIGNAL(updateRequest(QRect,int)), this, SLOT(updateLineNumberArea(QRect,int)));
-    connect(this, SIGNAL(cursorPositionChanged()), this, SLOT(highlightCurrentLine()));
+    connect(this, SIGNAL(cursorPositionChanged()), this, SLOT(highlightCurrentBlock()));
+    connect(this, SIGNAL(cursorPositionChanged()), line_command_area, SLOT(on_cursor_update_position()));
 
     updateLineNumberAreaWidth(0);
-    highlightCurrentLine();
-
+    highlightCurrentBlock();
 }
 
 int MQEditor::lineNumberAreaWidth()
@@ -32,9 +57,15 @@ int MQEditor::lineNumberAreaWidth()
     return space;
 }
 
+int  MQEditor::line_command_height()
+{
+    return line_command_area->height();
+}
+
+
 void MQEditor::updateLineNumberAreaWidth(int /* newBlockCount */)
 {
-    setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
+    setViewportMargins(lineNumberAreaWidth(), 0, 0, line_command_height());
 }
 
 
@@ -49,12 +80,14 @@ void MQEditor::updateLineNumberArea(const QRect &rect, int dy)
         updateLineNumberAreaWidth(0);
 }
 
+
 void MQEditor::resizeEvent(QResizeEvent *e)
 {
     QPlainTextEdit::resizeEvent(e);
 
     QRect cr = contentsRect();
-    lineNumberArea->setGeometry(QRect(cr.left(), cr.top(), lineNumberAreaWidth(), cr.height()));
+    lineNumberArea->setGeometry(QRect(cr.left(), cr.top(), lineNumberAreaWidth(), cr.height()-line_command_height()));
+    line_command_area->setGeometry(QRect(cr.left()+2, 3+cr.height()-line_command_height(), cr.width()-2, line_command_height()));
 }
 
 
@@ -70,8 +103,13 @@ void MQEditor::lineNumberAreaPaintEvent(QPaintEvent *event)
     while (block.isValid() && top <= event->rect().bottom()) {
         if (block.isVisible() && bottom >= event->rect().top()) {
             QString number = QString::number(blockNumber + 1);
-            painter.setPen(Qt::black);
-            painter.drawText(0, top, lineNumberArea->width(), fontMetrics().height(),
+            painter.setPen(QColor(100,100,100));
+            //QFont font ("monospace", 10);
+            //painter.setFont(font);
+            QFont font = this->font();
+            font.setPointSize(font.pointSize()-2);
+            painter.setFont(font);
+            painter.drawText(0, top, lineNumberArea->width()-2, fontMetrics().height(),
                              Qt::AlignRight, number);
         }
 
@@ -83,7 +121,9 @@ void MQEditor::lineNumberAreaPaintEvent(QPaintEvent *event)
 }
 
 
-void MQEditor::highlightCurrentLine()
+
+
+void MQEditor::highlightCurrentBlock()
 {
     QList<QTextEdit::ExtraSelection> extraSelections;
 
@@ -118,53 +158,116 @@ void MQEditor::highlightCurrentLine()
 
 void MQEditor::insert_tab(void)
 {
+    QTextCursor  cursor = this->textCursor();
+    int num_spaces2add = 4 - cursor.positionInBlock()%4;
+    if(num_spaces2add==0)  num_spaces2add = 3;
+    QString spaces2add (num_spaces2add, ' ');
+    cursor.insertText(spaces2add);
+}
+
+void MQEditor::increase_identation(void)
+{
     QTextCursor cursor = this->textCursor();
     int first_block_selected = 0;
     int last_block_selected = 0;
     int min_pos=0;
     int extra_line=0;
-    if(cursor.position() != cursor.anchor())
+    if(cursor.position() > cursor.anchor())
     {
-        if(cursor.position() > cursor.anchor())
-        {
-            last_block_selected = cursor.blockNumber();
-            if(cursor.atBlockStart()==false)
-                extra_line = 1;
-            cursor.setPosition(cursor.anchor());
-            first_block_selected = cursor.blockNumber();
-            min_pos = cursor.position();
-        }
-        else
-        {
-            first_block_selected = cursor.blockNumber();
-            min_pos = cursor.position();
-            cursor.setPosition(cursor.anchor());
-            last_block_selected = cursor.blockNumber();
-            if(cursor.atBlockStart()==false)
-                extra_line = 1;
-        }
-        if(first_block_selected != last_block_selected)
-        {
-            cursor.setPosition(min_pos);
-            for(int i=first_block_selected; i!=last_block_selected+extra_line; ++i)
-            {
-                cursor.movePosition(QTextCursor::StartOfBlock);
-                cursor.insertText("    ");
-                cursor.movePosition(QTextCursor::NextBlock);
-                if(cursor.atEnd())
-                    break;
-            }
-        }
+        last_block_selected = cursor.blockNumber();
+        if(cursor.atBlockStart()==false)
+            extra_line = 1;
+        cursor.setPosition(cursor.anchor());
+        first_block_selected = cursor.blockNumber();
+        min_pos = cursor.position();
     }
     else
     {
-        QTextCursor  cursor = this->textCursor();
-        int num_spaces2add = 4 - cursor.positionInBlock()%4;
-        if(num_spaces2add==0)  num_spaces2add = 4;
-        QString spaces2add (num_spaces2add, ' ');
-        cursor.insertText(spaces2add);
+        first_block_selected = cursor.blockNumber();
+        min_pos = cursor.position();
+        cursor.setPosition(cursor.anchor());
+        last_block_selected = cursor.blockNumber();
+        if(cursor.atBlockStart()==false)
+            extra_line = 1;
+    }
+    if(first_block_selected != last_block_selected)
+    {
+        cursor.setPosition(min_pos);
+        for(int i=first_block_selected; i!=last_block_selected+extra_line; ++i)
+        {
+            cursor.movePosition(QTextCursor::StartOfBlock);
+            cursor.insertText("    ");
+            cursor.movePosition(QTextCursor::NextBlock);
+            if(cursor.atEnd())
+                break;
+        }
     }
 }
+
+void MQEditor::decrease_identation(void)
+{
+    QTextCursor cursor = this->textCursor();
+    int first_block_selected = 0;
+    int last_block_selected = 0;
+    int min_pos=0;
+    int extra_line=0;
+    if(cursor.position() > cursor.anchor())
+    {
+        last_block_selected = cursor.blockNumber();
+        if(cursor.atBlockStart()==false)
+            extra_line = 1;
+        cursor.setPosition(cursor.anchor());
+        first_block_selected = cursor.blockNumber();
+        min_pos = cursor.position();
+    }
+    else
+    {
+        first_block_selected = cursor.blockNumber();
+        min_pos = cursor.position();
+        cursor.setPosition(cursor.anchor());
+        last_block_selected = cursor.blockNumber();
+        if(cursor.atBlockStart()==false)
+            extra_line = 1;
+    }
+    if(first_block_selected != last_block_selected)
+    {
+        cursor.setPosition(min_pos);
+        for(int i=first_block_selected; i!=last_block_selected+extra_line; ++i)
+        {
+            cursor.movePosition(QTextCursor::StartOfBlock);
+            //  try to remove 4 spaces at the beginning
+            for(int j=0; j<4; ++j)
+            {
+                cursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor);
+                if(cursor.selectedText() == " ")
+                    cursor.removeSelectedText();
+                else
+                    break;
+            }
+            cursor.movePosition(QTextCursor::NextBlock);
+            if(cursor.atEnd())
+                break;
+        }
+    }
+}
+
+void MQEditor::delete_back        (void)
+{
+    //  if spaces till previous tab point, remove all of them
+
+    if(this->textCursor().selectedText()!="")
+        this->textCursor().removeSelectedText();
+    else
+    {
+        QTextCursor  cursor = this->textCursor();
+        int dist_prev_tab = cursor.positionInBlock() % 4;
+        if(dist_prev_tab == 0)  dist_prev_tab = 4;
+        cursor.setPosition(cursor.position() - dist_prev_tab +1, QTextCursor::KeepAnchor);
+        if(cursor.selectedText().trimmed() == "")
+            cursor.removeSelectedText();
+    }
+}
+
 
 
 void MQEditor::keyPressEvent ( QKeyEvent * event )
@@ -175,9 +278,28 @@ void MQEditor::keyPressEvent ( QKeyEvent * event )
     if ((event->key() == Qt::Key_Tab)  &&  (event->modifiers()  &  Qt::ControlModifier  & Qt::ShiftModifier) )
         return;
 
+    if (event->key() == Qt::Key_Backtab)
+    {
+        QTextCursor  anchor_pos_cursor = this->textCursor();
+        anchor_pos_cursor.setPosition(this->textCursor().anchor());
+        if(this->textCursor().blockNumber() != anchor_pos_cursor.blockNumber())
+            decrease_identation();
+        return;
+    }
+
+    if((event->key() == Qt::Key_Backspace))
+    {
+        delete_back();
+    }
+
     if ((event->key() == Qt::Key_Tab)  )
     {
-        insert_tab();
+        QTextCursor  anchor_pos_cursor = this->textCursor();
+        anchor_pos_cursor.setPosition(this->textCursor().anchor());
+        if(this->textCursor().blockNumber() != anchor_pos_cursor.blockNumber())
+            increase_identation();
+        else
+            insert_tab();
         return;
     }
 
@@ -274,4 +396,33 @@ void MQEditor::keyPressEvent ( QKeyEvent * event )
 
 
     QPlainTextEdit::keyPressEvent(event);
+}
+
+
+LineCommandArea::LineCommandArea(MQEditor *editor)
+    : QWidget(editor), codeEditor(editor), layout(new QHBoxLayout(this)), txt_cursor_position(new QLabel(this))
+{
+    layout->setMargin(0);
+    codeEditor = editor;
+    layout->addWidget(txt_cursor_position);
+
+
+    QFont  command_font ("monospace", 10);
+    txt_cursor_position->setFont(command_font);
+    txt_cursor_position->adjustSize();
+    txt_cursor_position->setMargin(0);
+
+    this->setStyleSheet("background-color: rgb(220, 220, 220);");
+    this->setAutoFillBackground(true);
+
+    this->setLayout(layout);
+    on_cursor_update_position();
+}
+
+
+void LineCommandArea::on_cursor_update_position()
+{
+    txt_cursor_position->setText(QString("(%1,%2)")
+            .arg(codeEditor->textCursor().blockNumber()+1)
+            .arg(codeEditor->textCursor().positionInBlock()+1));
 }
