@@ -3,12 +3,15 @@
 
 #include <QPlainTextEdit>
 
+#include "support/signalslot.hpp"       //  maiquel-toolkit-cpp
+
 
 class LineNumberArea;
 class LineCommandArea;
 class QLabel;
 class QHBoxLayout;
-
+class QCompleter;
+class QStringListModel;
 
 /****************************************************************************
 
@@ -30,6 +33,11 @@ public:
     //void line_command_AreaPaintEvent(QPaintEvent *event);
     int  line_command_height();
 
+
+    mtk::Signal<    MQEditor*           /*editor*/,
+                    const QString&      /*text_under_cursor*/,
+                    QStringList&        /*return_completion_list*/>       signal_request_completion_list;
+
 protected:
     void keyPressEvent ( QKeyEvent * event );
     void resizeEvent(QResizeEvent *event);
@@ -42,21 +50,34 @@ private slots:
     void updateLineNumberAreaWidth(int newBlockCount);
     void updateLineNumberArea(const QRect &, int);
     void highlightCurrentBlock();
+    void insertCompletion(const QString &completion_text);
 
 private:
+    QWidget*            lineNumberArea;
+    LineCommandArea*    line_command_area;
+
+    QCompleter*         completer;
+    QStringListModel*   model_completer;
+
     void insert_tab         (void);
     void increase_identation(void);
     void decrease_identation(void);
     void delete_back        (void);
 
-    QWidget*            lineNumberArea;
-    LineCommandArea*    line_command_area;
+    QString                 textUnderCursor() const;
+    void                    show_completer(const QString &text_under_cursor);
+
 };
 
 
+/****************************************************************************/
 
 
 
+
+/****************************************************************************
+  LineNumberArea
+****************************************************************************/
 class LineNumberArea : public QWidget
 {
 public:
@@ -78,6 +99,9 @@ private:
 };
 
 
+/****************************************************************************
+  LineCommandArea
+****************************************************************************/
 class LineCommandArea : public QWidget
 {
     Q_OBJECT
@@ -96,5 +120,16 @@ private:
     QHBoxLayout*    layout;
     QLabel*         txt_cursor_position;
 };
+
+
+
+/****************************************************************************
+  fill_text_completion
+****************************************************************************/
+void  fill_text_completion(   MQEditor*             editor,
+                              const QString&        text_under_cursor,
+                              QStringList&          return_completion_list);
+
+
 
 #endif // MQEDITOR_H

@@ -7,27 +7,32 @@
 
   · find, replace, mark
 
-  · status bar with row and col
-
-  · command window with control key
+  · command line with control key
 
   · configuration with yaml
 
-  · borrar tabuladores a la izquierda, pendiente de mtk::s_trim
+  · borrar tabuladores a la izquierda, pendiente de mtk::s_trim. In remove tab
 
   */
 
 #include "mqeditor.h"
+
 #include <iostream>
 #include <QTextBlock>
 #include <QPainter>
 #include <QLabel>
 #include <QHBoxLayout>
+#include <QCompleter>
+#include <QApplication>
+#include <QStringListModel>
+#include <QScrollBar>
+#include <QStringListModel>
 
+#include "support/mtk_string.h"
 
 
 MQEditor::MQEditor(QWidget *parent) :
-    QPlainTextEdit(parent)
+    QPlainTextEdit(parent), model_completer(new QStringListModel)
 {
     line_command_area = new LineCommandArea(this);
     line_command_area->adjustSize();
@@ -41,6 +46,20 @@ MQEditor::MQEditor(QWidget *parent) :
 
     updateLineNumberAreaWidth(0);
     highlightCurrentBlock();
+
+    //  completer
+    completer = new QCompleter(this);
+    //completer->setModelSorting(QCompleter::CaseInsensitivelySortedModel);
+    completer->setCaseSensitivity(Qt::CaseInsensitive);
+    completer->setWrapAround(false);
+    completer->setWidget(this);
+    completer->setCompletionMode(QCompleter::PopupCompletion);
+    completer->setCaseSensitivity(Qt::CaseInsensitive);
+    completer->setModel(model_completer);
+    signal_request_completion_list.connect(fill_text_completion);
+    QObject::connect(completer, SIGNAL(activated(QString)),
+                     this, SLOT(insertCompletion(QString)));
+
 }
 
 int MQEditor::lineNumberAreaWidth()
@@ -263,15 +282,38 @@ void MQEditor::delete_back        (void)
         int dist_prev_tab = cursor.positionInBlock() % 4;
         if(dist_prev_tab == 0)  dist_prev_tab = 4;
         cursor.setPosition(cursor.position() - dist_prev_tab +1, QTextCursor::KeepAnchor);
-        if(cursor.selectedText().trimmed() == "")
+        if(mtk::s_trim(cursor.selectedText().toStdString(), ' ') == "")
             cursor.removeSelectedText();
     }
 }
 
 
+QString MQEditor::textUnderCursor() const
+{
+    QTextCursor tc = textCursor();
+    tc.select(QTextCursor::WordUnderCursor);
+    return tc.selectedText();
+}
+
 
 void MQEditor::keyPressEvent ( QKeyEvent * event )
 {
+    if (completer->popup()->isVisible()) {
+        // The following keys are forwarded by the completer to the widget
+       switch (event->key()) {
+       case Qt::Key_Enter:
+       case Qt::Key_Return:
+       case Qt::Key_Escape:
+       case Qt::Key_Tab:
+       case Qt::Key_Backtab:
+            event->ignore();
+            return; // let the completer do default behavior
+       default:
+           break;
+       }
+    }
+
+
     if ((event->key() == Qt::Key_Tab)  &&  (event->modifiers()  &  Qt::ControlModifier) )
         return;
 
@@ -395,8 +437,50 @@ void MQEditor::keyPressEvent ( QKeyEvent * event )
     }
 
 
-    QPlainTextEdit::keyPressEvent(event);
+    if((event->modifiers() | event->key()) == QKeySequence("Ctrl+Space"))
+        show_completer(textUnderCursor());
+    else
+    {
+        QPlainTextEdit::keyPressEvent(event);
+        QString  pressed_key_as_string = QKeySequence(event->key()).toString();
+        QString  text_under_cursor = textUnderCursor();
+        if(text_under_cursor.size() > 2  &&  ((event->text()!=""  &&  pressed_key_as_string[0].isLetterOrNumber())
+                ||  completer->popup()->isVisible()))
+            show_completer(text_under_cursor);
+        else
+            completer->popup()->hide();
+
+    }
 }
+
+void MQEditor::show_completer(const QString& text_under_cursor)
+{
+#ifndef QT_NO_CURSOR
+    QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
+#endif
+
+    QStringList completion_words;
+    signal_request_completion_list.emit(this, text_under_cursor, completion_words);
+
+
+#ifndef QT_NO_CURSOR
+    QApplication::restoreOverrideCursor();
+#endif
+    model_completer->setStringList(completion_words);
+
+    if (text_under_cursor != completer->completionPrefix()) {
+        completer->setCompletionPrefix(text_under_cursor);
+        completer->popup()->setCurrentIndex(completer->completionModel()->index(0, 0));
+    }
+    QRect cr = cursorRect();
+    int width = completer->popup()->sizeHintForColumn(0)
+            + completer->popup()->verticalScrollBar()->sizeHint().width();
+    if(width>300)   width = 300;
+    cr.setWidth(width);
+    completer->complete(cr); // popup it up!
+    return;
+}
+
 
 
 LineCommandArea::LineCommandArea(MQEditor *editor)
@@ -425,4 +509,33 @@ void LineCommandArea::on_cursor_update_position()
     txt_cursor_position->setText(QString("(%1,%2)")
             .arg(codeEditor->textCursor().blockNumber()+1)
             .arg(codeEditor->textCursor().positionInBlock()+1));
+}
+
+
+void  fill_text_completion(   MQEditor*             editor,
+                              const QString&        text_under_cursor,
+                              QStringList&          return_completion_list)
+{
+    QStringList words = editor->toPlainText().split(QRegExp("[^a-zA-Z0-9]"), QString::SkipEmptyParts);
+    words.removeDuplicates();
+    words.sort();
+
+    QString str;
+    foreach(str, words)
+    {
+        if(str != text_under_cursor  &&  str.toUpper().indexOf(text_under_cursor.toUpper())!=-1)
+            return_completion_list.append(str);
+    }
+}
+
+void MQEditor::insertCompletion(const QString& completion_text)
+{
+    if (completer->widget() != this)
+        return;
+    QTextCursor tc = textCursor();
+    tc.movePosition(QTextCursor::EndOfWord);
+    tc.movePosition(QTextCursor::Left, QTextCursor::KeepAnchor, completer->completionPrefix().length());
+    tc.removeSelectedText();
+    tc.insertText(completion_text);
+    setTextCursor(tc);
 }

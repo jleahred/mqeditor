@@ -6,6 +6,8 @@
 
 QT       += core gui
 
+QMAKE_CXXFLAGS += -std=gnu++0x
+
 TARGET = untitled6
 TEMPLATE = app
 
@@ -19,4 +21,7 @@ HEADERS  += mainwindow.h \
 
 FORMS    += mainwindow.ui
 
-INCLUDEPATH += ../srcs
+INCLUDEPATH += ../srcs  ../maiquel-tolkit-cpp/src
+
+
+LIBS  =  -L../maiquel-tolkit-cpp/lib       -lmtksupport  -lyaml
