@@ -14,14 +14,16 @@ TEMPLATE = app
 
 SOURCES += main.cpp\
         mainwindow.cpp \
-    ../src/mqeditor.cpp
+    ../src/mqeditor.cpp \
+    ../src/config.cpp
 
 HEADERS  += mainwindow.h \
-    ../src/mqeditor.h
+    ../src/mqeditor.h \
+    ../src/config.h
 
 FORMS    += mainwindow.ui
 
-INCLUDEPATH += ../srcs  ../maiquel-tolkit-cpp/src
+INCLUDEPATH += ../srcs  ../maiquel-toolkit-cpp/src
 
 
-LIBS  =  -L../maiquel-tolkit-cpp/lib       -lmtksupport  -lyaml
+LIBS  =  -L../maiquel-toolkit-cpp/lib       -lmtksupport  -lyaml
