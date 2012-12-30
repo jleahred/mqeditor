@@ -25,6 +25,7 @@ class MQEditor : public QPlainTextEdit
     Q_OBJECT
 public:
     explicit MQEditor(QWidget *parent = 0);
+    virtual ~MQEditor() {}
 
 
     void lineNumberAreaPaintEvent(QPaintEvent *event);
@@ -52,7 +53,7 @@ private slots:
     void highlightCurrentBlock();
     void insertCompletion(const QString &completion_text);
 
-private:
+protected:
     QWidget*            lineNumberArea;
     LineCommandArea*    line_command_area;
 
@@ -64,8 +65,10 @@ private:
     void decrease_identation(void);
     void delete_back        (void);
 
-    QString                 textUnderCursor() const;
-    void                    show_completer(const QString &text_under_cursor);
+    virtual  QString                textUnderCursor() const;
+    virtual  void                   show_completer(const QString &text_under_cursor);
+    virtual  void                   request_completion_list(const QString&      text_under_cursor, QStringList&   return_completion_list);
+
 
 };
 
@@ -126,6 +129,9 @@ private:
 /****************************************************************************
   fill_text_completion
 ****************************************************************************/
+/*
+    writted with signal slot instead on class just as an example
+  */
 void  fill_text_completion(   MQEditor*             editor,
                               const QString&        text_under_cursor,
                               QStringList&          return_completion_list);

@@ -453,6 +453,12 @@ void MQEditor::keyPressEvent ( QKeyEvent * event )
     }
 }
 
+
+void  MQEditor::request_completion_list(const QString&      text_under_cursor, QStringList&   return_completion_list)
+{
+    signal_request_completion_list.emit(this, text_under_cursor, return_completion_list);
+}
+
 void MQEditor::show_completer(const QString& text_under_cursor)
 {
 #ifndef QT_NO_CURSOR
@@ -460,24 +466,24 @@ void MQEditor::show_completer(const QString& text_under_cursor)
 #endif
 
     QStringList completion_words;
-    signal_request_completion_list.emit(this, text_under_cursor, completion_words);
-
+    request_completion_list(text_under_cursor, completion_words);
 
 #ifndef QT_NO_CURSOR
     QApplication::restoreOverrideCursor();
 #endif
     model_completer->setStringList(completion_words);
 
-    if (text_under_cursor != completer->completionPrefix()) {
+    /*if (text_under_cursor != completer->completionPrefix()) {
         completer->setCompletionPrefix(text_under_cursor);
         completer->popup()->setCurrentIndex(completer->completionModel()->index(0, 0));
-    }
+    }*/
     QRect cr = cursorRect();
     int width = completer->popup()->sizeHintForColumn(0)
             + completer->popup()->verticalScrollBar()->sizeHint().width();
     if(width>300)   width = 300;
     cr.setWidth(width);
     completer->complete(cr); // popup it up!
+    completer->popup()->setCurrentIndex(completer->completionModel()->index(0, 0));
     return;
 }
 
@@ -512,30 +518,34 @@ void LineCommandArea::on_cursor_update_position()
 }
 
 
-void  fill_text_completion(   MQEditor*             editor,
-                              const QString&        text_under_cursor,
-                              QStringList&          return_completion_list)
-{
-    QStringList words = editor->toPlainText().split(QRegExp("[^a-zA-Z0-9]"), QString::SkipEmptyParts);
-    words.removeDuplicates();
-    words.sort();
-
-    QString str;
-    foreach(str, words)
-    {
-        if(str != text_under_cursor  &&  str.toUpper().indexOf(text_under_cursor.toUpper())!=-1)
-            return_completion_list.append(str);
-    }
-}
-
 void MQEditor::insertCompletion(const QString& completion_text)
 {
     if (completer->widget() != this)
         return;
     QTextCursor tc = textCursor();
     tc.movePosition(QTextCursor::EndOfWord);
-    tc.movePosition(QTextCursor::Left, QTextCursor::KeepAnchor, completer->completionPrefix().length());
+    tc.movePosition(QTextCursor::Left, QTextCursor::KeepAnchor, textUnderCursor().length());
     tc.removeSelectedText();
     tc.insertText(completion_text);
     setTextCursor(tc);
+}
+
+void  fill_text_completion(   MQEditor*             editor,
+                              const QString&        text_under_cursor,
+                              QStringList&          return_completion_list)
+{
+    QStringList words = editor->toPlainText().split(QRegExp("[^a-zA-Z0-9_]"), QString::SkipEmptyParts);
+    words.removeDuplicates();
+    words.sort();
+
+    QStringList          secondary_completion_list;
+    QString str;
+    foreach(str, words)
+    {
+        if(str != text_under_cursor  &&  str.toUpper().indexOf(text_under_cursor.toUpper())==0)
+            return_completion_list.append(str);
+        else if(str != text_under_cursor  &&  str.toUpper().indexOf(text_under_cursor.toUpper())>0)
+            secondary_completion_list.append(str);
+    }
+    return_completion_list.append(secondary_completion_list);
 }
