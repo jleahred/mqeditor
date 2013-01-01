@@ -21,7 +21,7 @@ HEADERS  += mainwindow.h \
 
 FORMS    += mainwindow.ui
 
-INCLUDEPATH += ../srcs  ../maiquel-tolkit-cpp/src
+INCLUDEPATH += ../srcs  ../maiquel-toolkit-cpp/src
 
 
-LIBS  =  -L../maiquel-tolkit-cpp/lib       -lmtksupport  -lyaml
+LIBS  =  -L../maiquel-toolkit-cpp/lib       -lmtksupport  -lyaml
