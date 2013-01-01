@@ -60,6 +60,17 @@ MQEditor::MQEditor(QWidget *parent) :
     QObject::connect(completer, SIGNAL(activated(QString)),
                      this, SLOT(insertCompletion(QString)));
 
+
+    MTK_CONNECT_THIS(*register_command("__GLOBAL__",    "help",                 ""),                                                command_help);
+    MTK_CONNECT_THIS(*register_command("__GLOBAL__",    "ver",                  ""),                                                command_version);
+    MTK_CONNECT_THIS(*register_command("__GLOBAL__",    "modifs",               "brief information about modifications"),           command_modifications);
+    MTK_CONNECT_THIS(*register_command("__GLOBAL__",    "stats",                "some stats"),                                      command_stats);
+    MTK_CONNECT_THIS(*register_command("__GLOBAL__",    "config",               "config information"),                              command_config);
+
+}
+
+MQEditor::~MQEditor()
+{
 }
 
 int MQEditor::lineNumberAreaWidth()
@@ -84,7 +95,7 @@ int  MQEditor::line_command_height()
 
 void MQEditor::updateLineNumberAreaWidth(int /* newBlockCount */)
 {
-    setViewportMargins(lineNumberAreaWidth(), 0, 0, line_command_height());
+    update_ViewportMargins();
 }
 
 
@@ -104,9 +115,7 @@ void MQEditor::resizeEvent(QResizeEvent *e)
 {
     QPlainTextEdit::resizeEvent(e);
 
-    QRect cr = contentsRect();
-    lineNumberArea->setGeometry(QRect(cr.left(), cr.top(), lineNumberAreaWidth(), cr.height()-line_command_height()));
-    line_command_area->setGeometry(QRect(cr.left()+2, 3+cr.height()-line_command_height(), cr.width()-2, line_command_height()));
+    __resize();
 }
 
 
@@ -548,4 +557,95 @@ void  fill_text_completion(   MQEditor*             editor,
             secondary_completion_list.append(str);
     }
     return_completion_list.append(secondary_completion_list);
+}
+
+
+struct MQEditor::command_info {
+    mtk::non_copyable nc;
+
+    command_info(const std::string& _group, const std::string& _name, const std::string& _description)
+        :   group(_group), name(_name), description(_description),
+            signal_command_received(mtk::make_cptr(new mtk::Signal<const std::string& /*cmd*/, const std::string& /*params*/, mtk::list<std::string>& /*lines response*/> ))
+        {}
+
+    const std::string   group;
+    const std::string   name;
+    const std::string   description;
+    mtk::CountPtr<  mtk::Signal<    const std::string&      /*cmd*/,
+                                    const std::string&      /*params*/,
+                                    mtk::list<std::string>& /*respnose lines to fill*/> >   signal_command_received;
+
+};
+
+mtk::CountPtr<mtk::Signal<const std::string& /*cmd*/, const std::string& /*params*/, mtk::list<std::string>& /*response lines*/> >
+                                    MQEditor::register_command( const std::string& group,
+                                                                const std::string& name,
+                                                                const std::string& description)
+{
+    std::string full_command_name;
+    if(group=="__GLOBAL__")
+        full_command_name = name;
+    else
+        full_command_name = MTK_SS(mtk::s_toLower(group) << "." << name);
+
+    if(map_commands.find(full_command_name) == map_commands.end())
+    {
+        map_commands[full_command_name] = mtk::make_cptr(new MQEditor::command_info(group, full_command_name, description));
+        std::string help_line = MTK_SS( "        " << mtk::s_AlignLeft (name, 30, '.')  <<  " " << description);
+        map_commands_groupped_help[group] = MTK_SS(map_commands_groupped_help[group] << std::endl  <<  help_line);
+    }
+    return map_commands[full_command_name]->signal_command_received;
+}
+
+void MQEditor::command_help           (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines )
+{
+    mtk::map<std::string, std::string>::iterator it=map_commands_groupped_help.begin();
+    while(it!=map_commands_groupped_help.end())
+    {
+        response_lines.push_back(MTK_SS(std::endl << std::endl << it->first << std::endl << "------------------------------------"));
+        {
+            mtk::vector<std::string>   lines  = mtk::s_split(it->second, "\n");
+            for(unsigned int j=0; j<lines.size(); ++j)
+            {
+                response_lines.push_back(lines[j]);
+            }
+        }
+        ++it;
+    }
+}
+
+void MQEditor::command_version        (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines )
+{
+
+}
+
+void MQEditor::command_modifications  (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines )
+{
+
+}
+
+void MQEditor::command_stats          (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines )
+{
+
+}
+
+void MQEditor::command_config         (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines )
+{
+
+}
+
+
+
+void     MQEditor::update_ViewportMargins(void)
+{
+    setViewportMargins(lineNumberAreaWidth(), 0, 0, line_command_height());
+}
+
+void MQEditor::__resize(void)
+{
+    QRect cr = contentsRect();
+    lineNumberArea->setGeometry(QRect(cr.left(), cr.top(), lineNumberAreaWidth(), cr.height()-line_command_height()));
+    line_command_area->setGeometry(QRect(cr.left()+2, 3+cr.height()-line_command_height(), cr.width()-2, line_command_height()));
+
+    update_ViewportMargins();
 }

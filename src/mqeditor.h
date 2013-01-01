@@ -4,6 +4,8 @@
 #include <QPlainTextEdit>
 
 #include "support/signalslot.hpp"       //  maiquel-toolkit-cpp
+#include "support/list.hpp"
+#include "support/map.hpp"
 
 
 class LineNumberArea;
@@ -13,6 +15,8 @@ class QHBoxLayout;
 class QCompleter;
 class QStringListModel;
 
+
+
 /****************************************************************************
 
         MQEditor
@@ -20,24 +24,29 @@ class QStringListModel;
 
  ****************************************************************************/
 
-class MQEditor : public QPlainTextEdit
+class MQEditor : public QPlainTextEdit  , public  mtk::SignalReceptor
 {
     Q_OBJECT
 public:
     explicit MQEditor(QWidget *parent = 0);
-    virtual ~MQEditor() {}
+    virtual ~MQEditor();
 
 
     void lineNumberAreaPaintEvent(QPaintEvent *event);
     int  lineNumberAreaWidth();
 
-    //void line_command_AreaPaintEvent(QPaintEvent *event);
     int  line_command_height();
 
 
     mtk::Signal<    MQEditor*           /*editor*/,
                     const QString&      /*text_under_cursor*/,
                     QStringList&        /*return_completion_list*/>       signal_request_completion_list;
+
+    mtk::CountPtr<mtk::Signal<const std::string& /*cmd*/, const std::string& /*params*/, mtk::list<std::string>& /*response lines*/> >
+                                        register_command(   const std::string& group,
+                                                            const std::string& name,
+                                                            const std::string& description);
+
 
 protected:
     void keyPressEvent ( QKeyEvent * event );
@@ -65,11 +74,25 @@ protected:
     void decrease_identation(void);
     void delete_back        (void);
 
+
     virtual  QString                textUnderCursor() const;
     virtual  void                   show_completer(const QString &text_under_cursor);
     virtual  void                   request_completion_list(const QString&      text_under_cursor, QStringList&   return_completion_list);
 
+    virtual  void                   update_ViewportMargins(void);
+    virtual  void                   __resize              (void);
 
+private:
+    class command_info;
+    mtk::map<std::string, mtk::CountPtr<command_info> >             map_commands;
+    mtk::map<std::string/*group*/, std::string/*cmds help*/ >       map_commands_groupped_help;
+
+
+    void command_help           (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines );
+    void command_version        (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines );
+    void command_modifications  (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines );
+    void command_stats          (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines );
+    void command_config         (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines );
 };
 
 
