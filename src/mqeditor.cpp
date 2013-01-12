@@ -38,10 +38,14 @@
 
 
 MQEditor::MQEditor(QWidget *parent)
-    : QFrame(parent),
+    :
+      mq_editor_VM(new Mq_editor_VM),
+      frame_ex(parent),
       line_command_area(new LineCommandArea(this)),
       main_layout(new QVBoxLayout(this))
 {
+    line_command_area->signal_command_throwed.connect(&mq_editor_VM->signal_exec_command);
+
     main_layout->setMargin(0);
     main_layout->setSpacing(0);
 
@@ -59,15 +63,15 @@ MQEditor::MQEditor(QWidget *parent)
     splitter_h->addWidget(splitter_c2);
 
     {
-        MQEditorSingle* ex = new MQEditorSingle(this);
+        MQEditorSingle* ex = new MQEditorSingle(mq_editor_VM, this);
         ex->signal_cursor_position_change.connect(line_command_area, &LineCommandArea::on_cursor_update_position);
-        ex->signal_request_command.connect(line_command_area, &LineCommandArea::on_request_command_editor);
+        ex->signal_ask_command_user.connect(line_command_area, &LineCommandArea::on_ask_user_command);
         splitter_c1->addWidget(ex);
         ex->setPlainText("1");
         ex->setPlainText(QString::number(splitter_c1->count()));
     }
     {
-        MQEditorSingle* ex = new MQEditorSingle(this);
+        MQEditorSingle* ex = new MQEditorSingle(mq_editor_VM, this);
         ex->signal_cursor_position_change.connect(line_command_area, &LineCommandArea::on_cursor_update_position);
         splitter_c2->addWidget(ex);
         ex->setPlainText("2");
@@ -82,14 +86,14 @@ MQEditor::MQEditor(QWidget *parent)
     }
     */
     {
-        MQEditorSingle* ex = new MQEditorSingle(this);
+        MQEditorSingle* ex = new MQEditorSingle(mq_editor_VM, this);
         ex->signal_cursor_position_change.connect(line_command_area, &LineCommandArea::on_cursor_update_position);
         splitter_c2->addWidget(ex);
         ex->setPlainText("4");
         ex->setPlainText(QString::number(splitter_c2->count()));
     }
     {
-        MQEditorSingle* ex = new MQEditorSingle(this);
+        MQEditorSingle* ex = new MQEditorSingle(mq_editor_VM, this);
         ex->signal_cursor_position_change.connect(line_command_area, &LineCommandArea::on_cursor_update_position);
         splitter_c2->addWidget(ex);
         ex->setPlainText("5");
@@ -106,10 +110,16 @@ MQEditor::MQEditor(QWidget *parent)
 
 
 
-MQEditorSingle::MQEditorSingle(QWidget *parent) :
-    QPlainTextEdit(parent), model_completer(new QStringListModel), command_manager(new Command_manager)
+MQEditorSingle::MQEditorSingle(mtk::CountPtr<Mq_editor_VM> _vm, QWidget *parent)
+    :
+      QPlainTextEdit(parent),
+      model_completer(new QStringListModel),
+      mq_editor_VM(_vm),
+      command_manager(new Command_manager(mq_editor_VM))
 {
     lineNumberArea = new LineNumberArea(this);
+
+    MTK_CONNECT_THIS(command_manager->signal_ask_is_active, rq_is_active);
 
     connect(this, SIGNAL(blockCountChanged(int)), this, SLOT(updateLineNumberAreaWidth(int)));
     connect(this, SIGNAL(updateRequest(QRect,int)), this, SLOT(updateLineNumberArea(QRect,int)));
@@ -133,16 +143,21 @@ MQEditorSingle::MQEditorSingle(QWidget *parent) :
                      this, SLOT(insertCompletion(QString)));
 
 
-    MTK_CONNECT_THIS(*command_manager->register_command("ver",                  ""),                                                command_version);
-    MTK_CONNECT_THIS(*command_manager->register_command("modifs",               "brief information about modifications"),           command_modifications);
-    MTK_CONNECT_THIS(*command_manager->register_command("stats",                "some stats"),                                      command_stats);
-    MTK_CONNECT_THIS(*command_manager->register_command("config",               "config information"),                              command_config);
+    MTK_CONNECT_THIS(*command_manager->register_command(".ver",                 "version info"),                                    command_version);
+    MTK_CONNECT_THIS(*command_manager->register_command("edit.ver",             "version info"),                                    command_version);
+    MTK_CONNECT_THIS(*command_manager->register_command(".modifs",              "brief information about modifications"),           command_modifications);
+    MTK_CONNECT_THIS(*command_manager->register_command("edit.modifs",          "brief information about modifications"),           command_modifications);
+    MTK_CONNECT_THIS(*command_manager->register_command(".stats",               ""),                                                command_stats);
+    MTK_CONNECT_THIS(*command_manager->register_command("edit.stats",           ""),                                                command_stats);
+    MTK_CONNECT_THIS(*command_manager->register_command(".config",              "configuration information"),                       command_config);
+    MTK_CONNECT_THIS(*command_manager->register_command("edit.config",          "configuration information"),                       command_config);
 
 }
 
 MQEditorSingle::~MQEditorSingle()
 {
 }
+
 
 int MQEditorSingle::lineNumberAreaWidth()
 {
@@ -188,7 +203,7 @@ void MQEditorSingle::resizeEvent(QResizeEvent *e)
 void MQEditorSingle::lineNumberAreaPaintEvent(QPaintEvent *event)
 {
     QPainter painter(lineNumberArea);
-    painter.fillRect(event->rect(), Qt::lightGray);
+    painter.fillRect(event->rect(), QColor(Qt::lightGray).lighter(115));
 
     QTextBlock block = firstVisibleBlock();
     int blockNumber = block.blockNumber();
@@ -221,8 +236,9 @@ void MQEditorSingle::highlightCurrentBlock()
 {
     QList<QTextEdit::ExtraSelection> extraSelections;
 
-    if (!isReadOnly()) {
-        QColor lineColor = QColor(Qt::blue).lighter(185);
+    if (!isReadOnly()  &&  hasFocus()) {
+        QColor lineColor = QColor(Qt::yellow).lighter(185);
+
         QTextEdit::ExtraSelection selection;
         selection.format.setBackground(lineColor);
         selection.format.setProperty(QTextFormat::FullWidthSelection, true);
@@ -250,6 +266,21 @@ void MQEditorSingle::highlightCurrentBlock()
 }
 
 
+void MQEditorSingle::focusInEvent ( QFocusEvent * event )
+{
+    QPlainTextEdit::focusInEvent(event);
+    signal_cursor_position_change(this);
+    highlightCurrentBlock();
+}
+
+void MQEditorSingle::focusOutEvent(QFocusEvent *e)
+{
+    QPlainTextEdit::focusOutEvent(e);
+    highlightCurrentBlock();
+}
+
+
+
 void MQEditorSingle::insert_tab(void)
 {
     QTextCursor  cursor = this->textCursor();
@@ -258,6 +289,8 @@ void MQEditorSingle::insert_tab(void)
     QString spaces2add (num_spaces2add, ' ');
     cursor.insertText(spaces2add);
 }
+
+
 
 void MQEditorSingle::increase_identation(void)
 {
@@ -375,7 +408,7 @@ void MQEditorSingle::keyReleaseEvent(QKeyEvent *event)
 {
     if(last_key_pressed == QString("Ctrl+"))
     {
-        signal_request_command(this);
+        signal_ask_command_user(this);
         last_key_pressed = "";
     }
     else
@@ -581,7 +614,7 @@ void MQEditorSingle::show_completer(const QString& text_under_cursor)
 
 LineCommandArea::LineCommandArea(MQEditor *editor)
     :       QWidget(editor),
-            codeEditor_requesting_command(0),
+            widget_requesting_command(0),
             layout(new QHBoxLayout(this)),
             txt_cursor_position(new QLabel(this)),
             command_line_edit(new QLineEdit(this))
@@ -612,7 +645,9 @@ LineCommandArea::LineCommandArea(MQEditor *editor)
 
 void LineCommandArea::slot_command_edit_finished(void)
 {
-    signal_exec_command(command_line_edit->text().toStdString());
+    if(widget_requesting_command)
+        widget_requesting_command->setFocus();
+    signal_command_throwed(command_line_edit->text().toStdString());
     command_line_edit->setVisible(false);
     command_line_edit->setText("");
 }
@@ -631,12 +666,12 @@ void LineCommandArea::on_cursor_update_position(MQEditorSingle* codeEditor)
             .arg(codeEditor->textCursor().positionInBlock()+1));
 }
 
-void LineCommandArea::on_request_command_editor(MQEditorSingle* editor)
+void LineCommandArea::on_ask_user_command(QWidget *editor)
 {
     command_line_edit->setVisible(true);
     command_line_edit->setText("");
     command_line_edit->setFocus();
-    codeEditor_requesting_command = editor;
+    widget_requesting_command = editor;
 }
 
 
@@ -684,24 +719,24 @@ void  fill_text_completion(   MQEditorSingle*             editor,
 
 
 
-void MQEditorSingle::command_version        (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines )
+void MQEditorSingle::command_version        (const std::string& cmd)
 {
-
+    std::cout << cmd << std::endl;
 }
 
-void MQEditorSingle::command_modifications  (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines )
+void MQEditorSingle::command_modifications  (const std::string& cmd)
 {
-
+    std::cout << cmd << std::endl;
 }
 
-void MQEditorSingle::command_stats          (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines )
+void MQEditorSingle::command_stats          (const std::string& cmd)
 {
-
+    std::cout << cmd << std::endl;
 }
 
-void MQEditorSingle::command_config         (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines )
+void MQEditorSingle::command_config         (const std::string& cmd)
 {
-
+    std::cout << cmd << std::endl;
 }
 
 
@@ -725,19 +760,16 @@ struct Command_manager::command_info {
 
     command_info(const std::string& _name, const std::string& _description)
         :   name(_name), description(_description),
-            signal_command_received(mtk::make_cptr(new mtk::Signal<const std::string& /*cmd*/, const std::string& /*params*/, mtk::list<std::string>& /*lines response*/> ))
+            signal_command_received(mtk::make_cptr(new mtk::Signal<const std::string& /*cmd*/> ))
         {}
 
-    const std::string   group;
     const std::string   name;
     const std::string   description;
-    mtk::CountPtr<  mtk::Signal<    const std::string&      /*cmd*/,
-                                    const std::string&      /*params*/,
-                                    mtk::list<std::string>& /*respnose lines to fill*/> >   signal_command_received;
+    mtk::CountPtr<  mtk::Signal<    const std::string&      /*cmd*/> >   signal_command_received;
 
 };
 
-mtk::CountPtr<mtk::Signal<const std::string& /*cmd*/, const std::string& /*params*/, mtk::list<std::string>& /*response lines*/> >
+mtk::CountPtr<mtk::Signal<const std::string& /*cmd*/> >
                                     Command_manager::register_command(
                                                                 const std::string& name,
                                                                 const std::string& description)
@@ -751,14 +783,13 @@ mtk::CountPtr<mtk::Signal<const std::string& /*cmd*/, const std::string& /*param
 }
 
 
-void Command_manager::command_help           (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines )
+void Command_manager::command_help           (const std::string& cmd)
 {
-    std::cout << "command help  "  << cmd << std::endl;
     mtk::map<std::string, mtk::CountPtr<command_info> >::iterator it=map_commands.begin();
     while(it!=map_commands.end())
     {
         command_info&  ci = *it->second;
-        response_lines.push_back(MTK_SS(ci.name << "  "  <<  ci.description));
+        std::cout << ci.name << "  "  <<  ci.description << std::endl;
         ++it;
     }
 }
@@ -769,8 +800,8 @@ void LineCommandArea::keyPressEvent(QKeyEvent *event)
     QString key = QKeySequence(event->modifiers() | event->key()).toString();
     if(key=="Esc")
     {
-        codeEditor_requesting_command->setFocus();
-        codeEditor_requesting_command = 0;
+        widget_requesting_command->setFocus();
+        widget_requesting_command = 0;
         this->command_line_edit->setVisible(false);
         event->ignore();
     }
@@ -778,19 +809,28 @@ void LineCommandArea::keyPressEvent(QKeyEvent *event)
         QWidget::keyPressEvent(event);
 }
 
-Command_manager::Command_manager(void)
+Command_manager::Command_manager(mtk::CountPtr<Mq_editor_VM>& _vm)
+    : vm(_vm)
 {
-    MTK_CONNECT_THIS(*register_command("help",                  ""),                                                command_help);
+    MTK_CONNECT_THIS (vm->signal_exec_command, on_exec_command);
+
+    //  auto register help command
+    MTK_CONNECT_THIS(*register_command(".help",                  ""),                                                command_help);
 }
 
-
-namespace Command_dispatcher
+void  Command_manager::on_exec_command(const std::string &command)
 {
-
-    //  output
-    mtk::Signal<const std::string&/*command*/>&                                                  get_signal_exec_command()
+    bool is_active=false;
+    signal_ask_is_active(is_active);
+    if(is_active)
     {
-        static auto result = new mtk::Signal<const std::string&/*command*/>;
-        return *result;
+        auto  it = map_commands.find(command);
+        if(it != map_commands.end())
+        {
+            command_info&  ci = *(it->second);
+            ci.signal_command_received->emit(command);
+        }
     }
 }
+
+

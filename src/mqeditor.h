@@ -17,6 +17,7 @@ class QStringListModel;
 class QVBoxLayout;
 class QSplitter;
 class Command_manager;
+class Mq_editor_VM;
 class QLineEdit;
 
 
@@ -37,9 +38,11 @@ public:
     virtual ~MQEditor() {};
 
 private:
-    QWidget*            frame_ex;
-    LineCommandArea*    line_command_area;
-    QVBoxLayout*        main_layout;
+    mtk::CountPtr<Mq_editor_VM>         mq_editor_VM;
+
+    QWidget*                            frame_ex;
+    LineCommandArea*                    line_command_area;
+    QVBoxLayout*                        main_layout;
 };
 
 
@@ -53,16 +56,12 @@ class MQEditorSingle : public QPlainTextEdit  , public  mtk::SignalReceptor
 {
     Q_OBJECT
 public:
-    explicit MQEditorSingle(QWidget *parent = 0);
+    explicit MQEditorSingle(mtk::CountPtr<Mq_editor_VM> _vm, QWidget *parent = 0);
     virtual ~MQEditorSingle();
 
 
-    void lineNumberAreaPaintEvent(QPaintEvent *event);
-    int  lineNumberAreaWidth();
-
-
     //  OUTPUT
-    mtk::Signal<    MQEditorSingle*  >                                    signal_request_command;
+    mtk::Signal<    QWidget* /* from */  >                                signal_ask_command_user;
     mtk::Signal<    MQEditorSingle*           /*editor*/,
                     const QString&      /*text_under_cursor*/,
                     QStringList&        /*return_completion_list*/>       signal_request_completion_list;
@@ -70,11 +69,19 @@ public:
     mtk::Signal<    MQEditorSingle*  >                                    signal_cursor_position_change;
 
 
+    //  request response
+    void        rq_is_active(bool&  is_active)  {  is_active = this->hasFocus();  }
+
+
+    void lineNumberAreaPaintEvent(QPaintEvent *event);
+    int  lineNumberAreaWidth();
 
 protected:
     void keyPressEvent ( QKeyEvent * event );
     void keyReleaseEvent(QKeyEvent *event);
     void resizeEvent(QResizeEvent *event);
+    void focusInEvent ( QFocusEvent * event );
+    void focusOutEvent(QFocusEvent *e);
 
 signals:
     
@@ -92,6 +99,7 @@ protected:
 
     QCompleter*                         completer;
     QStringListModel*                   model_completer;
+    mtk::CountPtr<Mq_editor_VM>         mq_editor_VM;
     mtk::CountPtr<Command_manager>      command_manager;
 
 
@@ -111,10 +119,10 @@ protected:
 private:
     QString                 last_key_pressed;
 
-    void command_version        (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines );
-    void command_modifications  (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines );
-    void command_stats          (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines );
-    void command_config         (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines );
+    void command_version        (const std::string& cmd);
+    void command_modifications  (const std::string& cmd);
+    void command_stats          (const std::string& cmd);
+    void command_config         (const std::string& cmd);
 };
 
 
@@ -158,11 +166,11 @@ public:
 
 
     //  output
-    mtk::Signal<const std::string&>     signal_exec_command;
+    mtk::Signal<const std::string&>     signal_command_throwed;
 
     //  input
-    void on_cursor_update_position(MQEditorSingle* editor);
-    void on_request_command_editor(MQEditorSingle* editor);
+    void on_cursor_update_position  (MQEditorSingle* editor);
+    void on_ask_user_command        (QWidget* editor);
 
 
 public slots:
@@ -175,7 +183,7 @@ protected:
     virtual void keyPressEvent(QKeyEvent *);
 
 private:
-    MQEditorSingle* codeEditor_requesting_command;
+    QWidget*        widget_requesting_command;
 
     QHBoxLayout*    layout;
     QLabel*         txt_cursor_position;
@@ -197,39 +205,49 @@ void  fill_text_completion(   MQEditorSingle*             editor,
 
 
 /****************************************************************************
+  VM
+****************************************************************************/
+class Mq_editor_VM
+{
+
+public:
+    //  output
+    mtk::Signal<const std::string&/*command*/>            signal_exec_command;
+
+
+private:
+};
+
+
+
+
+/****************************************************************************
   Command_manager
 ****************************************************************************/
 class Command_manager  :  public  mtk::SignalReceptor
 {
 public:
-    Command_manager(void);
+    Command_manager(mtk::CountPtr<Mq_editor_VM>& _vm);
 
     //  input
     void  on_exec_command(const std::string&  command);
 
+    //  request_response
+    mtk::Signal<bool&>      signal_ask_is_active;
 
     //  REGISTER COMMANDS
-    virtual mtk::CountPtr<mtk::Signal<const std::string& /*cmd*/, const std::string& /*params*/, mtk::list<std::string>& /*response lines*/> >
-                                        register_command(   const std::string& name,
-                                                            const std::string& description);
+    virtual mtk::CountPtr<mtk::Signal<const std::string& /*cmd*/> > register_command(   const std::string& name,
+                                                                                        const std::string& description);
 private:
+    mtk::CountPtr<Mq_editor_VM>                                     vm;
     class command_info;
     mtk::map<std::string, mtk::CountPtr<command_info> >             map_commands;
 
 
-    void command_help           (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines );
+    void command_help           (const std::string& cmd);
 };
 
 
-/****************************************************************************
-  VM
-****************************************************************************/
-namespace VM
-{
-
-    //  output
-    mtk::Signal<const std::string&/*command*/>&                                                  get_signal_exec_command();
-}
 
 
 
