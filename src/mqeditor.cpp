@@ -783,7 +783,7 @@ mtk::CountPtr<mtk::Signal<const std::string& /*cmd*/> >
 }
 
 
-void Command_manager::command_help           (const std::string& cmd)
+void Command_manager::command_help           (const std::string& /*cmd*/)
 {
     mtk::map<std::string, mtk::CountPtr<command_info> >::iterator it=map_commands.begin();
     while(it!=map_commands.end())
