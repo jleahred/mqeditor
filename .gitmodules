@@ -1,0 +1,3 @@
+[submodule "maiquel-toolkit-cpp"]
+	path = maiquel-toolkit-cpp
+	url = https://code.google.com/p/maiquel-toolkit-cpp
