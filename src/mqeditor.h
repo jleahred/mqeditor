@@ -111,7 +111,6 @@ protected:
 private:
     QString                 last_key_pressed;
 
-    void command_help           (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines );
     void command_version        (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines );
     void command_modifications  (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines );
     void command_stats          (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines );
@@ -158,6 +157,8 @@ public:
     LineCommandArea(MQEditor *editor);
 
 
+    //  output
+    mtk::Signal<const std::string&>     signal_exec_command;
 
     //  input
     void on_cursor_update_position(MQEditorSingle* editor);
@@ -165,6 +166,10 @@ public:
 
 
 public slots:
+
+private slots:
+    void slot_command_edit_changed(QString  command);
+    void slot_command_edit_finished(void);
 
 protected:
     virtual void keyPressEvent(QKeyEvent *);
@@ -194,11 +199,14 @@ void  fill_text_completion(   MQEditorSingle*             editor,
 /****************************************************************************
   Command_manager
 ****************************************************************************/
-class Command_manager
+class Command_manager  :  public  mtk::SignalReceptor
 {
 public:
+    Command_manager(void);
 
-    void command_help           (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines );
+    //  input
+    void  on_exec_command(const std::string&  command);
+
 
     //  REGISTER COMMANDS
     virtual mtk::CountPtr<mtk::Signal<const std::string& /*cmd*/, const std::string& /*params*/, mtk::list<std::string>& /*response lines*/> >
@@ -207,8 +215,21 @@ public:
 private:
     class command_info;
     mtk::map<std::string, mtk::CountPtr<command_info> >             map_commands;
+
+
+    void command_help           (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines );
 };
 
+
+/****************************************************************************
+  VM
+****************************************************************************/
+namespace VM
+{
+
+    //  output
+    mtk::Signal<const std::string&/*command*/>&                                                  get_signal_exec_command();
+}
 
 
 

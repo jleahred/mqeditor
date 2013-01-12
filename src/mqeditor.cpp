@@ -133,7 +133,6 @@ MQEditorSingle::MQEditorSingle(QWidget *parent) :
                      this, SLOT(insertCompletion(QString)));
 
 
-    MTK_CONNECT_THIS(*command_manager->register_command("help",                 ""),                                                command_help);
     MTK_CONNECT_THIS(*command_manager->register_command("ver",                  ""),                                                command_version);
     MTK_CONNECT_THIS(*command_manager->register_command("modifs",               "brief information about modifications"),           command_modifications);
     MTK_CONNECT_THIS(*command_manager->register_command("stats",                "some stats"),                                      command_stats);
@@ -591,6 +590,8 @@ LineCommandArea::LineCommandArea(MQEditor *editor)
     layout->setMargin(0);
     //codeEditor = editor;
     command_line_edit->setVisible(false);
+    //connect(command_line_edit, SIGNAL(textChanged(QString)), this, SLOT(slot_command_edit_changed(QString)));
+    connect(command_line_edit, SIGNAL(returnPressed()), this, SLOT(slot_command_edit_finished()));
 
     layout->addWidget(txt_cursor_position);
     layout->addWidget(command_line_edit);
@@ -609,6 +610,18 @@ LineCommandArea::LineCommandArea(MQEditor *editor)
     setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
 }
 
+void LineCommandArea::slot_command_edit_finished(void)
+{
+    signal_exec_command(command_line_edit->text().toStdString());
+    command_line_edit->setVisible(false);
+    command_line_edit->setText("");
+}
+
+void LineCommandArea::slot_command_edit_changed(QString  command)
+{
+    std::cout << command.toStdString() << std::endl;
+}
+
 
 
 void LineCommandArea::on_cursor_update_position(MQEditorSingle* codeEditor)
@@ -621,7 +634,7 @@ void LineCommandArea::on_cursor_update_position(MQEditorSingle* codeEditor)
 void LineCommandArea::on_request_command_editor(MQEditorSingle* editor)
 {
     command_line_edit->setVisible(true);
-    command_line_edit->setText(":");
+    command_line_edit->setText("");
     command_line_edit->setFocus();
     codeEditor_requesting_command = editor;
 }
@@ -670,10 +683,6 @@ void  fill_text_completion(   MQEditorSingle*             editor,
 
 
 
-void MQEditorSingle::command_help           (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines )
-{
-    command_manager->command_help(cmd, params, response_lines);
-}
 
 void MQEditorSingle::command_version        (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines )
 {
@@ -744,6 +753,7 @@ mtk::CountPtr<mtk::Signal<const std::string& /*cmd*/, const std::string& /*param
 
 void Command_manager::command_help           (const std::string& cmd, const std::string& params, mtk::list<std::string>& response_lines )
 {
+    std::cout << "command help  "  << cmd << std::endl;
     mtk::map<std::string, mtk::CountPtr<command_info> >::iterator it=map_commands.begin();
     while(it!=map_commands.end())
     {
@@ -766,4 +776,21 @@ void LineCommandArea::keyPressEvent(QKeyEvent *event)
     }
     else
         QWidget::keyPressEvent(event);
+}
+
+Command_manager::Command_manager(void)
+{
+    MTK_CONNECT_THIS(*register_command("help",                  ""),                                                command_help);
+}
+
+
+namespace Command_dispatcher
+{
+
+    //  output
+    mtk::Signal<const std::string&/*command*/>&                                                  get_signal_exec_command()
+    {
+        static auto result = new mtk::Signal<const std::string&/*command*/>;
+        return *result;
+    }
 }
